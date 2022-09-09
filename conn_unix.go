@@ -14,7 +14,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
+	"unsafe"
 	"github.com/lesismal/nbio/mempool"
 	"github.com/lesismal/nbio/logging"
 )
