@@ -448,7 +448,7 @@ func (c *Conn) closeWithErrorWithoutLock(err error) error {
 	const size = 64 << 10
 	buf := make([]byte, size)
 	buf = buf[:runtime.Stack(buf, false)]
-	logging.Info("NBIO[%v] close stack: %v\n" *(*string)(unsafe.Pointer(&buf)))
+	logging.Info("close stack: %v\n", *(*string)(unsafe.Pointer(&buf)))
 	if c.wTimer != nil {
 		c.wTimer.Stop()
 		c.wTimer = nil
