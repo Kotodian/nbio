@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/lesismal/nbio/mempool"
+	"github.com/lesismal/nbio/logging"
 )
 
 // Conn implements net.Conn.
