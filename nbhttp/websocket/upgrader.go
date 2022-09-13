@@ -517,6 +517,7 @@ func (u *connState) handleProtocolMessage(p *nbhttp.Parser, opcode MessageType, 
 }
 
 func (u *Upgrader) handleWsMessage(c *Conn, opcode MessageType, data []byte) {
+	logging.Debug("op: %d, data:" + string(data))
 	switch opcode {
 	case TextMessage, BinaryMessage:
 		u.messageHandler(c, opcode, data)
