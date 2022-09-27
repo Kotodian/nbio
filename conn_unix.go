@@ -15,8 +15,9 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
-	"github.com/lesismal/nbio/mempool"
+
 	"github.com/lesismal/nbio/logging"
+	"github.com/lesismal/nbio/mempool"
 )
 
 // Conn implements net.Conn.
@@ -77,15 +78,16 @@ func (c *Conn) Read(b []byte) (int, error) {
 // Write implements Write.
 func (c *Conn) Write(b []byte) (int, error) {
 	// defer c.g.onWriteBufferFree(c, b)
-
+	logging.Info("before c.lock")
 	c.mux.Lock()
 	if c.closed {
 		c.mux.Unlock()
 		return -1, errClosed
 	}
-
+	logging.Info("after c.lock")
 	c.g.beforeWrite(c)
 
+	logging.Info("before c.write")
 	n, err := c.write(b)
 	if err != nil && !errors.Is(err, syscall.EINTR) && !errors.Is(err, syscall.EAGAIN) {
 		c.closed = true
@@ -94,16 +96,19 @@ func (c *Conn) Write(b []byte) (int, error) {
 		return n, err
 	}
 
+	logging.Info("after c.write")
 	if len(c.writeBuffer) == 0 {
 		if c.wTimer != nil {
 			c.wTimer.Stop()
 			c.wTimer = nil
 		}
 	} else {
+		logging.Info("mod write")
 		c.modWrite()
 	}
 
 	c.mux.Unlock()
+	logging.Info("after c.unlock")
 	return n, err
 }
 
@@ -114,6 +119,7 @@ func (c *Conn) Writev(in [][]byte) (int, error) {
 	// 		c.g.onWriteBufferFree(c, v)
 	// 	}
 	// }()
+	logging.Info("before write")
 	c.mux.Lock()
 	if c.closed {
 		c.mux.Unlock()

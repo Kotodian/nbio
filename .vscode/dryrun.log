@@ -1,4 +1,9 @@
-make.exe --dry-run --always-make --keep-going --print-directory
-'make.exe' �����ڲ����ⲿ���Ҳ���ǿ����еĳ���
-���������ļ���
-
+make --dry-run --always-make --keep-going --print-directory
+make: Entering directory `/Users/linqiankai/go/src/github.com/Kotodian/nbio'
+go vet github.com/lesismal/nbio github.com/lesismal/nbio/autobahn github.com/lesismal/nbio/autobahn/server github.com/lesismal/nbio/extension/tls github.com/lesismal/nbio/logging github.com/lesismal/nbio/mempool github.com/lesismal/nbio/nbhttp github.com/lesismal/nbio/nbhttp/tests github.com/lesismal/nbio/nbhttp/websocket github.com/lesismal/nbio/taskpool
+ 
+golangci-lint run /Users/linqiankai/go/src/github.com/Kotodian/nbio /Users/linqiankai/go/src/github.com/Kotodian/nbio/autobahn /Users/linqiankai/go/src/github.com/Kotodian/nbio/autobahn/server /Users/linqiankai/go/src/github.com/Kotodian/nbio/extension/tls /Users/linqiankai/go/src/github.com/Kotodian/nbio/logging /Users/linqiankai/go/src/github.com/Kotodian/nbio/mempool /Users/linqiankai/go/src/github.com/Kotodian/nbio/nbhttp /Users/linqiankai/go/src/github.com/Kotodian/nbio/nbhttp/tests /Users/linqiankai/go/src/github.com/Kotodian/nbio/nbhttp/websocket /Users/linqiankai/go/src/github.com/Kotodian/nbio/taskpool
+ 
+go test -race -v github.com/lesismal/nbio github.com/lesismal/nbio/autobahn github.com/lesismal/nbio/autobahn/server github.com/lesismal/nbio/extension/tls github.com/lesismal/nbio/logging github.com/lesismal/nbio/mempool github.com/lesismal/nbio/nbhttp github.com/lesismal/nbio/nbhttp/tests github.com/lesismal/nbio/nbhttp/websocket github.com/lesismal/nbio/taskpool
+make: Leaving directory `/Users/linqiankai/go/src/github.com/Kotodian/nbio'
+ 
