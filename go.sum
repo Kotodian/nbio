@@ -1,3 +1,5 @@
+github.com/Kotodian/llib v0.0.1 h1:k16/YW+P7jLQKN6cE6IEaIAW/3RPbq2f39TCKhgpVCk=
+github.com/Kotodian/llib v0.0.1/go.mod h1:cvC/4dcgcLhY7OTqCl0NAGzHIEgGs9G+rCGw10HnMAQ=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/cespare/xxhash v1.1.0/go.mod h1:XrSqR1VqqWfGrhpAt58auRo0WTKS1nRRg3ghfAqPWnc=
 github.com/lesismal/llib v1.1.6 h1:/mtiOFShydKSEsO/cajK8benGD1OHgP51GrBni7rGEY=

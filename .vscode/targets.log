@@ -8,11 +8,10 @@ make all --print-data-base --no-builtin-variables --no-builtin-rules --question
 # This program built for i386-apple-darwin11.3.0
  
 
-# Make data base, printed on Tue Sep 27 15:44:30 2022
+# Make data base, printed on Fri Sep 30 10:02:04 2022
 
 # Variables
 
- 
 # automatic
 <D = $(patsubst %/,%,$(dir $<))
 # automatic
@@ -21,6 +20,8 @@ make all --print-data-base --no-builtin-variables --no-builtin-rules --question
 BULLETTRAIN_GIT_BG = #FFE3E3
 # automatic
 ?D = $(patsubst %/,%,$(dir $?))
+# environment
+PLATFORMIO_IDE = 2.5.4
 # automatic
 @D = $(patsubst %/,%,$(dir $@))
 # automatic
@@ -47,8 +48,9 @@ INFOPATH = /opt/homebrew/share/info:
 VSCODE_CWD = /
 # environment
 GOPROXY = https://goproxy.cn
+ 
 # environment
-PATH = /Users/linqiankai/goroot/go1.18/bin:/usr/local/protobuf/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/go/bin:/Users/linqiankai/.cargo/bin:/usr/local/mysql/bin:/Users/linqiankai/.local/bin/Users/linqiankai/goroot/go1.18/bin:/Users/linqiankai/go/bin
+NO_PROXY = 127.0.0.1
 # environment
 GOROOT = /Users/linqiankai/goroot/go1.18
 # environment
@@ -98,13 +100,17 @@ VSCODE_HANDLES_UNCAUGHT_ERRORS = true
 # automatic
 ^D = $(patsubst %/,%,$(dir $^))
 # environment
-XPC_FLAGS = 0x0
+PLATFORMIO_PATH = /Users/linqiankai/.platformio/python3/bin:/Users/linqiankai/goroot/go1.18/bin:/usr/local/protobuf/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/go/bin:/Users/linqiankai/.cargo/bin:/usr/local/mysql/bin:/Users/linqiankai/.local/bin/Users/linqiankai/goroot/go1.18/bin:/Users/linqiankai/go/bin
 # default
 MAKE = $(MAKE_COMMAND)
 # default
 MAKECMDGOALS := all
 # environment
+PATH = /Users/linqiankai/goroot/go1.18/bin:/usr/local/protobuf/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/go/bin:/Users/linqiankai/.cargo/bin:/usr/local/mysql/bin:/Users/linqiankai/.local/bin/Users/linqiankai/goroot/go1.18/bin:/Users/linqiankai/go/bin
+# environment
 SHLVL = 1
+# environment
+XPC_FLAGS = 0x0
 # default
 MAKE_VERSION := 3.81
 # environment
@@ -160,6 +166,8 @@ MAKEFILES :=
 # automatic
 <F = $(notdir $<)
 # environment
+PLATFORMIO_CALLER = vscode
+# environment
 PAGER = less
 # environment
 LC_ALL = C
@@ -178,7 +186,7 @@ LANG = C
 # environment
 VSCODE_PID = 582
 # variable set hash-table stats:
-# Load=82/1024=8%, Rehash=0, Collisions=3/114=3%
+# Load=86/1024=8%, Rehash=0, Collisions=5/118=4%
 
 # Pattern-specific Variable Values
 
@@ -293,7 +301,6 @@ lint:
 #  Implicit rule search has not been done.
 #  File does not exist.
 #  File has not been updated.
- 
 #  commands to execute (from `Makefile', line 12):
 	golangci-lint run $(PACKAGE_DIRS)
 	
@@ -321,6 +328,6 @@ autobahn: clean bin/reporter
 # strcache size: total = 4096 / max = 4096 / min = 4096 / avg = 4096
 # strcache free: total = 4087 / max = 4087 / min = 4087 / avg = 4087
 
-# Finished Make data base on Tue Sep 27 15:44:30 2022
+# Finished Make data base on Fri Sep 30 10:02:04 2022
 
  
