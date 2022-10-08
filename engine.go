@@ -5,15 +5,13 @@
 package nbio
 
 import (
-	"container/heap"
 	"context"
 	"net"
-	"runtime"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/lesismal/nbio/logging"
+	"github.com/lesismal/nbio/timer"
 )
 
 const (
@@ -25,6 +23,9 @@ const (
 
 	// DefaultMaxConnReadTimesPerEventLoop .
 	DefaultMaxConnReadTimesPerEventLoop = 3
+
+	// DefaultUDPReadTimeout .
+	DefaultUDPReadTimeout = 120 * time.Second
 )
 
 var (
@@ -68,6 +69,12 @@ type Config struct {
 
 	// EpollMod sets the epoll mod, EPOLLLT by default.
 	EpollMod uint32
+
+	// UDPReadTimeout sets the timeout for udp sessions.
+	UDPReadTimeout time.Duration
+
+	// TimerExecute sets the executor for timer callbacks.
+	TimerExecute func(f func())
 }
 
 // Gopher keeps old type to compatible with new name Engine.
@@ -79,11 +86,13 @@ func NewGopher(conf Config) *Gopher {
 
 // Engine is a manager of poller.
 type Engine struct {
+	*timer.Timer
 	sync.WaitGroup
 
 	Name string
 
-	Execute func(f func())
+	Execute      func(f func())
+	TimerExecute func(f func())
 
 	mux sync.Mutex
 
@@ -95,6 +104,7 @@ type Engine struct {
 	readBufferSize               int
 	maxWriteBufferSize           int
 	maxConnReadTimesPerEventLoop int
+	udpReadTimeout               time.Duration
 	epollMod                     uint32
 	lockListener                 bool
 	lockPoller                   bool
@@ -116,12 +126,6 @@ type Engine struct {
 	afterRead   func(c *Conn)
 	beforeWrite func(c *Conn)
 	onStop      func()
-
-	callings  []func()
-	chCalling chan struct{}
-	timers    timerHeap
-	trigger   *time.Timer
-	chTimer   chan struct{}
 }
 
 // Stop closes listeners/pollers/conns/timer.
@@ -140,7 +144,7 @@ func (g *Engine) Stop() {
 	for c := range conns {
 		if c != nil {
 			cc := c
-			g.atOnce(func() {
+			g.Async(func() {
 				cc.Close()
 			})
 		}
@@ -148,7 +152,7 @@ func (g *Engine) Stop() {
 	for _, c := range connsUnix {
 		if c != nil {
 			cc := c
-			g.atOnce(func() {
+			g.Async(func() {
 				cc.Close()
 			})
 		}
@@ -159,8 +163,7 @@ func (g *Engine) Stop() {
 
 	g.onStop()
 
-	g.trigger.Stop()
-	close(g.chTimer)
+	g.Timer.Stop()
 
 	for i := 0; i < g.pollerNum; i++ {
 		g.pollers[i].stop()
@@ -192,8 +195,8 @@ func (g *Engine) AddConn(conn net.Conn) (*Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	// equal g.pollers[uint32(c.Hash())%uint32(g.pollerNum)].addConn(c)
-	noRaceConnOpOnEngine(g, c.Hash()%g.pollerNum, "addConn", c)
+
+	noRaceConnOperation(g, c, noRaceConnOpAdd)
 	return c, nil
 }
 
@@ -214,7 +217,7 @@ func (g *Engine) OnClose(h func(c *Conn, err error)) {
 		panic("invalid nil handler")
 	}
 	g.onCloseOnNoRace(func(c *Conn, err error) {
-		// g.atOnce(func() {
+		// g.Async(func() {
 		defer g.wgConn.Done()
 		h(c, err)
 		// })
@@ -293,163 +296,9 @@ func (g *Engine) OnStop(h func()) {
 	g.onStopOnNoRace(h)
 }
 
-// After used as time.After.
-func (g *Engine) After(timeout time.Duration) <-chan time.Time {
-	c := make(chan time.Time, 1)
-	g.afterFunc(timeout, func() {
-		c <- time.Now()
-	})
-	return c
-}
-
-// AfterFunc used as time.AfterFunc.
-func (g *Engine) AfterFunc(timeout time.Duration, f func()) *Timer {
-	ht := g.afterFunc(timeout, f)
-	return &Timer{htimer: ht}
-}
-
-func (g *Engine) atOnce(f func()) {
-	if f != nil {
-		g.mux.Lock()
-		g.callings = append(g.callings, f)
-		g.mux.Unlock()
-		select {
-		case g.chCalling <- struct{}{}:
-		default:
-		}
-	}
-}
-
-func (g *Engine) afterFunc(timeout time.Duration, f func()) *htimer {
-	g.mux.Lock()
-	defer g.mux.Unlock()
-
-	now := time.Now()
-	it := &htimer{
-		index:  len(g.timers),
-		expire: now.Add(timeout),
-		f:      f,
-		parent: g,
-	}
-	heap.Push(&g.timers, it)
-	if g.timers[0] == it {
-		g.trigger.Reset(timeout)
-	}
-
-	return it
-}
-
-func (g *Engine) removeTimer(it *htimer) {
-	g.mux.Lock()
-	defer g.mux.Unlock()
-
-	index := it.index
-	if index < 0 || index >= len(g.timers) {
-		return
-	}
-
-	if g.timers[index] == it {
-		heap.Remove(&g.timers, index)
-		if len(g.timers) > 0 {
-			if index == 0 {
-				g.trigger.Reset(time.Until(g.timers[0].expire))
-
-			}
-		} else {
-			g.trigger.Reset(timeForever)
-		}
-	}
-}
-
-// ResetTimer removes a timer.
-func (g *Engine) resetTimer(it *htimer) {
-	g.mux.Lock()
-	defer g.mux.Unlock()
-
-	index := it.index
-	if index < 0 || index >= len(g.timers) {
-		return
-	}
-
-	if g.timers[index] == it {
-		heap.Fix(&g.timers, index)
-		if index == 0 || it.index == 0 {
-			g.trigger.Reset(time.Until(g.timers[0].expire))
-		}
-	}
-}
-
-func (g *Engine) timerLoop() {
-	defer g.Done()
-	logging.Debug("NBIO[%v] timer start", g.Name)
-	defer logging.Debug("NBIO[%v] timer stopped", g.Name)
-	for {
-		select {
-		case <-g.chCalling:
-			for {
-				g.mux.Lock()
-				if len(g.callings) == 0 {
-					g.callings = nil
-					g.mux.Unlock()
-					break
-				}
-				f := g.callings[0]
-				g.callings = g.callings[1:]
-				g.mux.Unlock()
-				func() {
-					defer func() {
-						err := recover()
-						if err != nil {
-							const size = 64 << 10
-							buf := make([]byte, size)
-							buf = buf[:runtime.Stack(buf, false)]
-							logging.Error("NBIO[%v] exec call failed: %v\n%v\n", g.Name, err, *(*string)(unsafe.Pointer(&buf)))
-						}
-					}()
-					f()
-				}()
-			}
-		case <-g.trigger.C:
-			for {
-				g.mux.Lock()
-				if g.timers.Len() == 0 {
-					g.trigger.Reset(timeForever)
-					g.mux.Unlock()
-					break
-				}
-				now := time.Now()
-				it := g.timers[0]
-				if now.After(it.expire) {
-					heap.Remove(&g.timers, it.index)
-					g.mux.Unlock()
-					func() {
-						defer func() {
-							err := recover()
-							if err != nil {
-								const size = 64 << 10
-								buf := make([]byte, size)
-								buf = buf[:runtime.Stack(buf, false)]
-								logging.Error("NBIO[%v] exec timer failed: %v\n%v\n", g.Name, err, *(*string)(unsafe.Pointer(&buf)))
-							}
-						}()
-						it.f()
-					}()
-				} else {
-					g.trigger.Reset(it.expire.Sub(now))
-					g.mux.Unlock()
-					break
-				}
-			}
-		case <-g.chTimer:
-			return
-		}
-	}
-}
-
 // PollerBuffer returns Poller's buffer by Conn, can be used on linux/bsd.
 func (g *Engine) PollerBuffer(c *Conn) []byte {
-	// equal return g.pollers[uint32(c.Hash())%uint32(g.pollerNum)].ReadBuffer
-	return noRaceGetReadBufferFromPoller(g, c.Hash()%g.pollerNum)
+	return noRaceGetReadBufferFromPoller(c)
 }
 
 func (g *Engine) initHandlers() {

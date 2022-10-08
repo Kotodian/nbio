@@ -8,29 +8,51 @@
 package nbio
 
 import (
+	"net"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/lesismal/nbio/logging"
+	"github.com/lesismal/nbio/timer"
 )
 
 // Start init and start pollers.
 func (g *Engine) Start() error {
-	var err error
-
-	for i := 0; i < len(g.addrs); i++ {
-		g.listeners[i], err = newPoller(g, true, i)
-		if err != nil {
-			for j := 0; j < i; j++ {
-				g.listeners[j].stop()
+	udpListeners := make([]*net.UDPConn, len(g.addrs))[0:0]
+	switch g.network {
+	case "tcp", "tcp4", "tcp6":
+		for i := range g.addrs {
+			ln, err := newPoller(g, true, i)
+			if err != nil {
+				for j := 0; j < i; j++ {
+					g.listeners[j].stop()
+				}
+				return err
 			}
-			return err
+			g.listeners = append(g.listeners, ln)
+		}
+	case "udp", "udp4", "udp6":
+		for i, addrStr := range g.addrs {
+			addr, err := net.ResolveUDPAddr(g.network, addrStr)
+			if err != nil {
+				for j := 0; j < i; j++ {
+					udpListeners[j].Close()
+				}
+				return err
+			}
+			ln, err := net.ListenUDP("udp", addr)
+			if err != nil {
+				for j := 0; j < i; j++ {
+					udpListeners[j].Close()
+				}
+				return err
+			}
+			udpListeners = append(udpListeners, ln)
 		}
 	}
 
 	for i := 0; i < g.pollerNum; i++ {
-		g.pollers[i], err = newPoller(g, false, i)
+		p, err := newPoller(g, false, i)
 		if err != nil {
 			for j := 0; j < len(g.listeners); j++ {
 				g.listeners[j].stop()
@@ -41,17 +63,36 @@ func (g *Engine) Start() error {
 			}
 			return err
 		}
+		g.pollers[i] = p
 	}
 	noRacePollerRun(g)
 	noRaceListenerRun(g)
 
-	g.Add(1)
-	go g.timerLoop()
+	for _, ln := range udpListeners {
+		_, err := g.AddConn(ln)
+		if err != nil {
+			for j := 0; j < len(g.listeners); j++ {
+				g.listeners[j].stop()
+			}
+
+			for j := 0; j < len(g.pollers); j++ {
+				g.pollers[j].stop()
+			}
+
+			for j := 0; j < len(udpListeners); j++ {
+				udpListeners[j].Close()
+			}
+
+			return err
+		}
+	}
+
+	g.Timer.Start()
 
 	if len(g.addrs) == 0 {
 		logging.Info("NBIO[%v] start", g.Name)
 	} else {
-		logging.Info("NBIO[%v] start listen on: [\"%v\"]", g.Name, strings.Join(g.addrs, `", "`))
+		logging.Info("NBIO[%v] start listen on: [\"%v@%v\"]", g.Name, g.network, strings.Join(g.addrs, `", "`))
 	}
 	return nil
 }
@@ -73,6 +114,7 @@ func NewEngine(conf Config) *Engine {
 	}
 
 	g := &Engine{
+		Timer:                        timer.New(conf.Name, conf.TimerExecute),
 		Name:                         conf.Name,
 		network:                      conf.Network,
 		addrs:                        conf.Addrs,
@@ -80,16 +122,13 @@ func NewEngine(conf Config) *Engine {
 		readBufferSize:               conf.ReadBufferSize,
 		maxWriteBufferSize:           conf.MaxWriteBufferSize,
 		maxConnReadTimesPerEventLoop: conf.MaxConnReadTimesPerEventLoop,
+		udpReadTimeout:               conf.UDPReadTimeout,
 		epollMod:                     conf.EpollMod,
 		lockListener:                 conf.LockListener,
 		lockPoller:                   conf.LockPoller,
-		listeners:                    make([]*poller, len(conf.Addrs)),
+		listeners:                    make([]*poller, len(conf.Addrs))[0:0],
 		pollers:                      make([]*poller, conf.NPoller),
 		connsUnix:                    make([]*Conn, MaxOpenFiles),
-		callings:                     []func(){},
-		chCalling:                    make(chan struct{}, 1),
-		trigger:                      time.NewTimer(timeForever),
-		chTimer:                      make(chan struct{}),
 	}
 
 	g.initHandlers()

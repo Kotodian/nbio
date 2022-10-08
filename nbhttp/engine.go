@@ -135,19 +135,31 @@ type Config struct {
 	// MaxConnReadTimesPerEventLoop represents max read times in one poller loop for one fd
 	MaxConnReadTimesPerEventLoop int
 
+	// Handler sets HTTP handler for Engine.
 	Handler http.Handler
 
+	// ServerExecutor sets the executor for server callbacks.
 	ServerExecutor func(f func())
 
+	// ClientExecutor sets the executor for client callbacks.
 	ClientExecutor func(f func())
 
+	// TimerExecutor sets the executor for timer callbacks.
+	TimerExecutor func(f func())
+
+	// TLSAllocator sets the buffer allocator for TLS.
 	TLSAllocator tls.Allocator
 
+	// BodyAllocator sets the buffer allocator for HTTP.
 	BodyAllocator mempool.Allocator
 
+	// Context sets common context for Engine.
 	Context context.Context
-	Cancel  func()
 
+	// Cancel sets the cancel func for common context.
+	Cancel func()
+
+	// SupportServerOnly .
 	SupportServerOnly bool
 }
 
@@ -168,7 +180,7 @@ type Engine struct {
 	_onStop  func()
 
 	mux   sync.Mutex
-	conns map[*nbio.Conn]struct{}
+	conns map[uintptr]struct{}
 
 	tlsBuffers   [][]byte
 	getTLSBuffer func(c *nbio.Conn) []byte
@@ -203,7 +215,8 @@ func (e *Engine) Online() int {
 func (e *Engine) closeIdleConns(chCloseQueue chan *nbio.Conn) {
 	e.mux.Lock()
 	defer e.mux.Unlock()
-	for c := range e.conns {
+	for v := range e.conns {
+		c := *((**nbio.Conn)(unsafe.Pointer(&v)))
 		sess := c.Session()
 		if sess != nil {
 			if c.ExecuteLen() == 0 {
@@ -219,7 +232,8 @@ func (e *Engine) closeIdleConns(chCloseQueue chan *nbio.Conn) {
 func (e *Engine) closeAllConns() {
 	e.mux.Lock()
 	defer e.mux.Unlock()
-	for c := range e.conns {
+	for v := range e.conns {
+		c := *((**nbio.Conn)(unsafe.Pointer(&v)))
 		c.Close()
 	}
 }
@@ -265,7 +279,7 @@ func (e *Engine) startListeners() error {
 						e.AddConnTLS(conn, tlsConfig)
 					} else {
 						var ne net.Error
-						if ok := errors.As(err, &ne); ok && ne.Temporary() {
+						if ok := errors.As(err, &ne); ok && ne.Timeout() {
 							logging.Error("Accept failed: temporary error, retrying...")
 							time.Sleep(time.Second / 20)
 						} else {
@@ -309,7 +323,7 @@ func (e *Engine) startListeners() error {
 						e.AddConnNonTLS(conn)
 					} else {
 						var ne net.Error
-						if ok := errors.As(err, &ne); ok && ne.Temporary() {
+						if ok := errors.As(err, &ne); ok && ne.Timeout() {
 							logging.Error("Accept failed: temporary error, retrying...")
 							time.Sleep(time.Second / 20)
 						} else {
@@ -408,12 +422,10 @@ func (e *Engine) InitTLSBuffers() {
 	}
 	e.tlsBuffers = make([][]byte, e.NParser)
 	for i := 0; i < e.NParser; i++ {
-		// equal e.tlsBuffers[i] = make([]byte, e.ReadBufferSize)
 		noRaceInitTlsBufferFormEngine(e, i)
 	}
 
 	e.getTLSBuffer = func(c *nbio.Conn) []byte {
-		// equal return e.tlsBuffers[uint64(c.Hash())%uint64(e.NParser)]
 		return noRaceGetTlsBufferFromEngine(e, c)
 	}
 
@@ -520,7 +532,7 @@ func (engine *Engine) AddConnNonTLS(c net.Conn) {
 		c.Close()
 		return
 	}
-	engine.conns[nbc] = struct{}{}
+	engine.conns[uintptr(unsafe.Pointer(nbc))] = struct{}{}
 	engine.mux.Unlock()
 	engine._onOpen(nbc)
 	processor := NewServerProcessor(nbc, engine.Handler, engine.KeepaliveTime, !engine.DisableSendfile)
@@ -549,7 +561,7 @@ func (engine *Engine) AddConnTLS(conn net.Conn, tlsConfig *tls.Config) {
 		nbc.Close()
 		return
 	}
-	engine.conns[nbc] = struct{}{}
+	engine.conns[uintptr(unsafe.Pointer(nbc))] = struct{}{}
 	engine.mux.Unlock()
 	engine._onOpen(nbc)
 
@@ -653,6 +665,7 @@ func NewEngine(conf Config) *Engine {
 		MaxConnReadTimesPerEventLoop: conf.MaxConnReadTimesPerEventLoop,
 		LockPoller:                   conf.LockPoller,
 		LockListener:                 conf.LockListener,
+		TimerExecute:                 conf.TimerExecutor,
 	}
 	g := nbio.NewEngine(gopherConf)
 	g.Execute = serverExecutor
@@ -674,7 +687,7 @@ func NewEngine(conf Config) *Engine {
 		MaxWebsocketFramePayloadSize: conf.MaxWebsocketFramePayloadSize,
 		ReleaseWebsocketPayload:      conf.ReleaseWebsocketPayload,
 		CheckUtf8:                    utf8.Valid,
-		conns:                        map[*nbio.Conn]struct{}{},
+		conns:                        map[uintptr]struct{}{},
 		ExecuteClient:                clientExecutor,
 
 		emptyRequest: (&http.Request{}).WithContext(baseCtx),
@@ -696,7 +709,7 @@ func NewEngine(conf Config) *Engine {
 			}
 			engine._onClose(c, err)
 			engine.mux.Lock()
-			delete(engine.conns, c)
+			delete(engine.conns, uintptr(unsafe.Pointer(c)))
 			engine.mux.Unlock()
 		})
 	})
