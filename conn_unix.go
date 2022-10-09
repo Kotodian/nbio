@@ -159,19 +159,16 @@ func (c *Conn) Write(b []byte) (int, error) {
 		return n, err
 	}
 
-	// logging.Info("after c.write")
 	if len(c.writeBuffer) == 0 {
 		if c.wTimer != nil {
 			c.wTimer.Stop()
 			c.wTimer = nil
 		}
 	} else {
-		// logging.Info("mod write")
 		c.modWrite()
 	}
 
 	c.mux.Unlock()
-	// logging.Info("after c.unlock")
 	return n, err
 }
 
