@@ -497,8 +497,10 @@ func (e *Engine) TLSDataHandler(c *nbio.Conn, data []byte) {
 		for {
 			_, nread, err := tlsConn.AppendAndRead(data, buffer)
 			data = nil
-			if err != nil && !errors.Is(err, io.EOF) {
-				logging.Error("tlsConn.AppendAndRead: %v", err)
+			if err != nil {
+				if !errors.Is(err, io.EOF) {
+					logging.Error("tlsConn.AppendAndRead: %v", err)
+				}
 				c.CloseWithError(err)
 				return
 			}
