@@ -356,6 +356,22 @@ func (c *Conn) SetLinger(onoff int32, linger int32) error {
 	})
 }
 
+// SetReusePort
+func (c *Conn) SetReusePort(reuse bool) error {
+	if reuse {
+		return syscall.SetsockoptInt(c.fd, syscall.SOL_SOCKET, syscall.SO_REUSEPORT, 1)
+	}
+	return syscall.SetsockoptInt(c.fd, syscall.SOL_SOCKET, syscall.SO_REUSEPORT, 0)
+}
+
+// SetReuseAddr
+func (c *Conn) SetReuseAddr(reuse bool) error {
+	if reuse {
+		return syscall.SetsockoptInt(c.fd, syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+	}
+	return syscall.SetsockoptInt(c.fd, syscall.SOL_SOCKET, syscall.SO_REUSEPORT, 0)
+}
+
 // Session returns user session.
 func (c *Conn) Session() interface{} {
 	return c.session
@@ -608,7 +624,7 @@ func (u *udpConn) Close() error {
 		parent.mux.Lock()
 		delete(parent.connUDP.conns, u.rAddrStr)
 		parent.mux.Unlock()
-	} else {		
+	} else {
 		syscall.Close(u.parent.fd)
 		for _, c := range u.conns {
 			c.Close()
